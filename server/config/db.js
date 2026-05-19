@@ -1,0 +1,12 @@
+import mongoose from "mongoose";
+
+export async function connectDB() {
+  const uri = process.env.MONGO_URI || "mongodb://localhost:27017/aierudit_bookshop";
+  try {
+    await mongoose.connect(uri);
+    console.log(`[db] connected to ${uri}`);
+  } catch (err) {
+    console.error("[db] connection error:", err.message);
+    process.exit(1);
+  }
+}
