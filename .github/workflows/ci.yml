@@ -1,0 +1,86 @@
+name: CI
+
+# The AIErudit Bookshop capstone starter ships intentionally broken — the
+# planted bugs (CAPSTONE-BUG-1..5) are part of the learning material, not
+# regressions to fix. This CI workflow exists to:
+#
+#   1. Catch real regressions introduced to the surrounding scaffolding
+#      (build breakage, smoke-test failures, planted-bug markers
+#      disappearing).
+#   2. Give forkers a green baseline CI state to confirm their environment
+#      is healthy before starting Module 6 work.
+#
+# What this workflow does NOT do:
+#   - Fix the planted bugs (they are intentional).
+#   - Run integration tests against MongoDB. The capstone starter is
+#     designed to run with either Atlas or local Docker Mongo; either
+#     setup is the learner's responsibility, not CI's.
+
+on:
+  push:
+    branches: [main]
+  pull_request:
+    branches: [main]
+  workflow_dispatch:
+
+jobs:
+  smoke:
+    name: Smoke (Node ${{ matrix.node }})
+    runs-on: ubuntu-24.04
+    strategy:
+      fail-fast: false
+      matrix:
+        node: ["20", "22"]
+    steps:
+      - name: Checkout
+        uses: actions/checkout@v4
+      - name: Setup Node ${{ matrix.node }}
+        uses: actions/setup-node@v4
+        with:
+          node-version: ${{ matrix.node }}
+          cache: npm
+      - name: Install server dependencies
+        run: npm ci
+      - name: Install client dependencies
+        run: npm ci --prefix client
+      - name: Run server smoke test
+        run: npm test
+      - name: Build client (Vite)
+        run: npm run build --prefix client
+
+  planted-bugs:
+    name: Verify planted-bug markers
+    runs-on: ubuntu-24.04
+    steps:
+      - name: Checkout
+        uses: actions/checkout@v4
+      - name: Confirm all 5 CAPSTONE-BUG markers are present
+        shell: bash
+        run: |
+          set -euo pipefail
+          missing=0
+          for i in 1 2 3 4 5; do
+            hits="$(grep -rIE "CAPSTONE-BUG-${i}" server/ client/ 2>/dev/null | wc -l)"
+            if [[ "${hits}" -lt 1 ]]; then
+              echo "::error::CAPSTONE-BUG-${i} marker missing from server/ or client/ — the planted bug should never be silently removed."
+              missing=$((missing + 1))
+            else
+              echo "OK CAPSTONE-BUG-${i}: ${hits} marker(s) found"
+            fi
+          done
+          if [[ "${missing}" -gt 0 ]]; then
+            echo "::error::${missing} planted bug(s) lost their markers. Either restore the markers or document the removal in CAPSTONE_INSTRUCTOR_NOTES.md before merging."
+            exit 1
+          fi
+      - name: Confirm CAPSTONE_INSTRUCTOR_NOTES.md still names all 5 bugs
+        shell: bash
+        run: |
+          set -euo pipefail
+          missing=0
+          for i in 1 2 3 4 5; do
+            if ! grep -qE "CAPSTONE-BUG-${i}" CAPSTONE_INSTRUCTOR_NOTES.md; then
+              echo "::error::CAPSTONE_INSTRUCTOR_NOTES.md does not mention CAPSTONE-BUG-${i} — instructor notes must stay in sync with the planted bugs."
+              missing=$((missing + 1))
+            fi
+          done
+          [[ "${missing}" -eq 0 ]] || exit 1
