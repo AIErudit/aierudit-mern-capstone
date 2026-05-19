@@ -38,11 +38,14 @@ jobs:
         uses: actions/setup-node@v4
         with:
           node-version: ${{ matrix.node }}
-          cache: npm
+      # No package-lock.json is committed (starter repos avoid lockfile churn
+      # so learners forking the repo on different OS / Node minor versions
+      # don't immediately hit conflicts). Use `npm install` instead of
+      # `npm ci`. Drop `cache: npm` since it requires a lockfile.
       - name: Install server dependencies
-        run: npm ci
+        run: npm install --no-audit --no-fund
       - name: Install client dependencies
-        run: npm ci --prefix client
+        run: npm install --no-audit --no-fund --prefix client
       - name: Run server smoke test
         run: npm test
       - name: Build client (Vite)
